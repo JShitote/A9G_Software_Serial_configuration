@@ -87,12 +87,13 @@ void loop()
   t = dht.readTemperature(); //Temperature in Celsius
   h = dht.readHumidity(); //Humidity
   f = dht.readTemperature(true); //Temperature in Fahrenheit
+  //float m = (analog.read(A0))/1024
   // Check if any reads failed and exit early (to try again).
   if (isnan(h) || isnan(t) || isnan(f)) {
     Serial.println("Failed to read from DHT sensor!");
     return;
   }
-
+// transmission to the phone
   if (textMessage.indexOf("Status") >= 0) {
     textMessage = "";
     String message1 = "Temperature (Celsius): " + String(t);
@@ -101,10 +102,15 @@ void loop()
     String message = message1 + message2;
     sendSMS(message);
   }
+  
+  //cloud transmission, transmission to ThingSpeak
   Serial2.print("AT+CGATT=1\r");//check if the chip is registered to the network
   Serial2.print("AT+CGACT=1,1\r");//check if the chip is registered to the network
   Serial2.print("AT+CGDCONT=1,\"IP\",\"safaricom\"\r");//APN configuration
   String cmdString = "AT+HTTPGET=\"http://api.thingspeak.com/update.json?api_key=" + apiKey + "&field1=" + t + "&field2=" + h + "&field3=0.0&field4=0.0" + "\"";
+  //String cmdString = ""AT+MQTTCONN=\"test.mosquitto.org\",1883,\"mqttx_0931852d34\";
+  //String cmdString = ""AT+MQTTSUB=\"/public/TEST/makerfabs-B\";
+  //String cmdString = ""AT+MQTTPUB=\"/public/TEST/makerfabs-W\",\""+(String)windspeek+"\"
   Serial2.println(cmdString);
 }
 
