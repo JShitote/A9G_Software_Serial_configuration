@@ -20,16 +20,23 @@
 #include <stdio.h>
 #include <string.h>
 #include "DHT.h"            //library for DHT sensor
+#include "HX711.h"
 
 // Uncomment one of the lines below for whatever DHT sensor type you're using
 #define DHTTYPE DHT11      // DHT 11
 //#define DHTTYPE DHT21    // DHT 21 (AM2301)
 //#define DHTTYPE DHT22    // DHT 22  (AM2302), AM2321
 //#define DEBUG true
+#define calibration_factor -7050.0 //This value is obtained using the SparkFun_HX711_Calibration sketch
+#define LOADCELL_DOUT_PIN  19
+#define LOADCELL_SCK_PIN  18
+
+HX711 scale;
 
 const int DHTPin = 2;      // DHT11 connected to D4 (GPIO4) pin of ESP32 development board
 DHT dht(DHTPin, DHTTYPE);  // create an instance of the dht class called DHT
 float h, t, f;             // Variables for temperature and humidity
+const int MQ6 = 4;
 
 const String apiKey = "FE1A89S55LRZNQXI";
 String textMessage;        // Variable to store text message
@@ -42,6 +49,11 @@ void setup()
   dht.begin();                             // Initialize DHT sensor
   pinMode(DHTPin, INPUT);                  // Set DHTPin as INPUT
   delay(2000);              // Give time to your GSM module logon to GSM network
+
+   scale.begin(LOADCELL_DOUT_PIN, LOADCELL_SCK_PIN);
+   scale.set_scale(calibration_factor); //This value is obtained by using the SparkFun_HX711_Calibration sketch
+   scale.tare(); //Assuming there is no weight on the scale at start up, reset the scale to 0
+   Serial.println("Readings:");
 
   //A9G Tests
   Serial.println("GSMmodule ready...");  //Print test in Serial Monitor
@@ -87,30 +99,34 @@ void loop()
   t = dht.readTemperature(); //Temperature in Celsius
   h = dht.readHumidity(); //Humidity
   f = dht.readTemperature(true); //Temperature in Fahrenheit
-  //float m = (analog.read(A0))/1024
   // Check if any reads failed and exit early (to try again).
   if (isnan(h) || isnan(t) || isnan(f)) {
     Serial.println("Failed to read from DHT sensor!");
     return;
   }
-// transmission to the phone
+
+  int MQ6Val = digitalRead(MQ6);
+
+  float weight = (scale.get_units(), 1);
+  Serial.print(weight);
+
   if (textMessage.indexOf("Status") >= 0) {
     textMessage = "";
     String message1 = "Temperature (Celsius): " + String(t);
     //String message1 = "Temperature (Fahrenheit): " + String(f);
     String message2 = " Humidity: " + String(h);
-    String message = message1 + message2;
+    String message3 = " GasConc: " + String(MQ6Val);
+    String message4 = " Weight: " + String(weight);
+    String message = message1 + message2 + message3;
     sendSMS(message);
   }
-  
-  //cloud transmission, transmission to ThingSpeak
   Serial2.print("AT+CGATT=1\r");//check if the chip is registered to the network
+  delay(500);
   Serial2.print("AT+CGACT=1,1\r");//check if the chip is registered to the network
+  delay(500);
   Serial2.print("AT+CGDCONT=1,\"IP\",\"safaricom\"\r");//APN configuration
-  String cmdString = "AT+HTTPGET=\"http://api.thingspeak.com/update.json?api_key=" + apiKey + "&field1=" + t + "&field2=" + h + "&field3=0.0&field4=0.0" + "\"";
-  //String cmdString = ""AT+MQTTCONN=\"test.mosquitto.org\",1883,\"mqttx_0931852d34\";
-  //String cmdString = ""AT+MQTTSUB=\"/public/TEST/makerfabs-B\";
-  //String cmdString = ""AT+MQTTPUB=\"/public/TEST/makerfabs-W\",\""+(String)windspeek+"\"
+  delay(10000);
+  String cmdString = "AT+HTTPGET=\"http://api.thingspeak.com/update.json?api_key=" + apiKey + "&field1=" + t + "&field2=" + h + "&field3=" + MQ6Val + "&field4=" + weight + "\"";
   Serial2.println(cmdString);
 }
 
